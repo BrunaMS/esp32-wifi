@@ -21,6 +21,28 @@
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
 #define EXAMPLE_ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
 
+#define EXAMPLE_ESP_WIFI_CHANNEL   CONFIG_ESP_WIFI_CHANNEL
+#define EXAMPLE_MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
+
+#if CONFIG_ESP_WIFI_AUTH_OPEN
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_OPEN
+#elif CONFIG_ESP_WIFI_AUTH_WEP
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WEP
+#elif CONFIG_ESP_WIFI_AUTH_WPA_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WPA2_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA2_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WPA_WPA2_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA_WPA2_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WPA3_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA3_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WPA2_WPA3_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA2_WPA3_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WAPI_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WAPI_PSK
+#endif
+
+
 /* FreeRTOS event group to signal when we are connected*/
 EventGroupHandle_t wifiEventGroup = NULL;
 
@@ -33,25 +55,51 @@ EventGroupHandle_t wifiEventGroup = NULL;
 static int s_retry_num = 0;
 
 
-static void event_handler(void* arg, esp_event_base_t event_base,
+static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
-            esp_wifi_connect();
-            s_retry_num++;
-            ESP_LOGI(TAG, "retry to connect to the AP");
-        } else {
-            xEventGroupSetBits(wifiEventGroup, WIFI_FAIL_BIT);
-        }
-        ESP_LOGI(TAG,"connect to the AP fail");
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
-        s_retry_num = 0;
-        xEventGroupSetBits(wifiEventGroup, WIFI_CONNECTED_BIT);
+    ip_event_got_ip_t* ip_event = NULL;
+    wifi_event_ap_staconnected_t* ap_staconnected_event = NULL;
+    wifi_event_ap_stadisconnected_t* ap_stadisconnected_event = NULL;
+
+    switch(event_id){
+        case WIFI_EVENT_AP_STACONNECTED:
+            ap_staconnected_event = (wifi_event_ap_staconnected_t*) event_data;
+            ESP_LOGI(TAG, "station "MACSTR" join, AID=%d",
+                    MAC2STR(ap_staconnected_event->mac), ap_staconnected_event->aid);
+            break;
+            
+        case WIFI_EVENT_AP_STADISCONNECTED:
+            ap_stadisconnected_event = (wifi_event_ap_stadisconnected_t*) event_data;
+            ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d",
+                    MAC2STR(ap_stadisconnected_event->mac), ap_stadisconnected_event->aid);
+            break;
+
+        case WIFI_EVENT_STA_START:
+            if (event_base == WIFI_EVENT) {
+                esp_wifi_connect();
+            }
+            break;
+        case WIFI_EVENT_STA_DISCONNECTED:
+            if(event_base == WIFI_EVENT) {
+                if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
+                    esp_wifi_connect();
+                    s_retry_num++;
+                    ESP_LOGI(TAG, "retry to connect to the AP");
+                } else {
+                    xEventGroupSetBits(wifiEventGroup, WIFI_FAIL_BIT);
+                    ESP_LOGI(TAG,"connect to the AP fail");
+                }
+            }
+            break;
+        case IP_EVENT_STA_GOT_IP:
+            if (event_base == IP_EVENT) {
+                ip_event = (ip_event_got_ip_t*) event_data;
+                ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&ip_event->ip_info.ip));
+                s_retry_num = 0;
+                xEventGroupSetBits(wifiEventGroup, WIFI_CONNECTED_BIT);
+            }
+            break;
     }
 }
 
@@ -69,15 +117,16 @@ void wifiInitSta(void)
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
     esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &event_handler,
-                                                        NULL,
-                                                        &instance_any_id);
+                                        ESP_EVENT_ANY_ID,
+                                        &wifiEventHandler,
+                                        NULL,
+                                        &instance_any_id);
+                                        
     esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
-                                                        &event_handler,
-                                                        NULL,
-                                                        &instance_got_ip);
+                                        IP_EVENT_STA_GOT_IP,
+                                        &wifiEventHandler,
+                                        NULL,
+                                        &instance_got_ip);
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -119,6 +168,43 @@ void wifiInitSta(void)
     }
 }
 
+void wifiInitSoftap(void)
+{
+    esp_netif_init();
+    esp_event_loop_create_default();
+    esp_netif_create_default_wifi_ap();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+
+    esp_event_handler_instance_register(WIFI_EVENT,
+                                        ESP_EVENT_ANY_ID,
+                                        &wifiEventHandler,
+                                        NULL,
+                                        NULL);
+
+    wifi_config_t wifi_config = {
+        .ap = {
+            .ssid = EXAMPLE_ESP_WIFI_SSID,
+            .ssid_len = strlen(EXAMPLE_ESP_WIFI_SSID),
+            .channel = EXAMPLE_ESP_WIFI_CHANNEL,
+            .password = EXAMPLE_ESP_WIFI_PASS,
+            .max_connection = EXAMPLE_MAX_STA_CONN,
+            .authmode = WIFI_AUTH_WPA_WPA2_PSK,
+        },
+    };
+    if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
+        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    esp_wifi_set_mode(WIFI_MODE_AP);
+    esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
+    esp_wifi_start();
+
+    ESP_LOGI(TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
+             EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS, EXAMPLE_ESP_WIFI_CHANNEL);
+}
+
 void wifiServiceReceiver(void* pvParameters){
     // I believe that this library is using the nvs partition somewhere (maybe someday I will discover where)
     // esp_wifi_init brief talks about nvs initialization
@@ -139,6 +225,7 @@ void wifiServiceReceiver(void* pvParameters){
 void wifiServiceTransmitter(void* pvParameters){
     // I believe that this library is using the nvs partition somewhere (maybe someday I will discover where)
     // esp_wifi_init brief talks about nvs initialization
+    // Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOGE(TAG, "Error initializing nvs. Erasing to try again.");
@@ -146,9 +233,10 @@ void wifiServiceTransmitter(void* pvParameters){
         ret = nvs_flash_init();
     }
 
-	wifiInitSta();
+	wifiInitSoftap();
     for(;;){
         ESP_LOGD(TAG, "Inside task loop...");
         vTaskDelay(pdMS_TO_TICKS(3000));
     }
+
 }

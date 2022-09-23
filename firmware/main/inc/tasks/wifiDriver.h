@@ -14,4 +14,4 @@
 */
 
 #pragma once
-void wifiService(void* pvParameters);
+void wifiServiceTransmitter(void* pvParameters);
