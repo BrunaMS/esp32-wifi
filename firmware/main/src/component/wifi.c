@@ -32,6 +32,7 @@
 #define MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
 #endif
 
+#ifdef CONFIG_WIFI_DEVICE_MODE_RECEIVER
 #if CONFIG_ESP_WIFI_AUTH_OPEN
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_OPEN
 #elif CONFIG_ESP_WIFI_AUTH_WEP
@@ -48,6 +49,7 @@
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA2_WPA3_PSK
 #elif CONFIG_ESP_WIFI_AUTH_WAPI_PSK
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WAPI_PSK
+#endif
 #endif
 
 
@@ -100,7 +102,6 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                 }
             }
             break;
-#endif
         case IP_EVENT_STA_GOT_IP:
             if (event_base == IP_EVENT) {
                 ip_event = (ip_event_got_ip_t*) event_data;
@@ -109,6 +110,7 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                 xEventGroupSetBits(wifiEventGroup, WIFI_CONNECTED_BIT);
             }
             break;
+#endif
     }
 }
 
@@ -173,7 +175,7 @@ void wifiInitSta(void)
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
             pdFALSE,
             pdFALSE,
-            portMAX_DELAY);
+            pdMS_TO_TICKS(10000));
 
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
