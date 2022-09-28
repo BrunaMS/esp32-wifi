@@ -24,7 +24,7 @@
 #define ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
 
 #ifdef CONFIG_WIFI_DEVICE_MODE_RECEIVER
-#define ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
+#define ESP_WIFI_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
 #endif
 
 #ifdef CONFIG_WIFI_DEVICE_MODE_TRANSMITTER
@@ -84,7 +84,7 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                     MAC2STR(ap_stadisconnected_event->mac), ap_stadisconnected_event->aid);
             break;
 
-#ifdef WIFI_DEVICE_MODE_RECEIVER
+#ifdef CONFIG_WIFI_DEVICE_MODE_RECEIVER
         case WIFI_EVENT_STA_START:
             if (event_base == WIFI_EVENT) {
                 esp_wifi_connect();
@@ -92,7 +92,7 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             if(event_base == WIFI_EVENT) {
-                if (s_retry_num < ESP_MAXIMUM_RETRY) {
+                if (s_retry_num < ESP_WIFI_MAXIMUM_RETRY) {
                     esp_wifi_connect();
                     s_retry_num++;
                     ESP_LOGI(TAG, "retry to connect to the AP");

@@ -3,14 +3,14 @@ menu "Wi-Fi Configuration"
     choice WIFI_DEVICE_MODE
         prompt "Wi-Fi Device Mode"
         default WIFI_DEVICE_MODE_TRANSMITTER
-        help
-            When set to Transmitter mode, an AP will be created using the chosen SSID and PASSWORD (set below, in this menu). After it is in ap mode, the device will be able to open an http server and allow the user to choose a file to send to the connected devices.  
-            When set to Receiver mode, this device will connect to the given SSID (using the given password) when wait to receive one file from that.
         
         config WIFI_DEVICE_MODE_TRANSMITTER
             bool "Transmitter mode (AP)"
         config WIFI_DEVICE_MODE_RECEIVER
             bool "Receiver Mode (Station)"
+        help
+            When set to Transmitter mode, an AP will be created using the chosen SSID and PASSWORD (set below, in this menu). After it is in ap mode, the device will be able to open an http server and allow the user to choose a file to send to the connected devices.  
+            When set to Receiver mode, this device will connect to the given SSID (using the given password) when wait to receive one file from that.
     endchoice
 
 
@@ -29,7 +29,6 @@ menu "Wi-Fi Configuration"
     config ESP_MAXIMUM_RETRY
         int "Maximum retry"
         default 5
-            bool "WAPI PSK"
         depends on WIFI_DEVICE_MODE_RECEIVER
         help
             Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
