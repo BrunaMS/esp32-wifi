@@ -121,6 +121,7 @@ void wifiInitNvs(){
     }
 }
 
+#ifdef CONFIG_WIFI_DEVICE_MODE_RECEIVER
 void wifiInitSta(void)
 {
     wifiInitNvs();
@@ -186,7 +187,9 @@ void wifiInitSta(void)
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
 }
+#endif
 
+#ifdef CONFIG_WIFI_DEVICE_MODE_TRANSMITTER
 void wifiInitSoftap(void)
 {
     wifiInitNvs();
@@ -208,8 +211,8 @@ void wifiInitSoftap(void)
             .ssid = ESP_WIFI_SSID,
             .ssid_len = strlen(ESP_WIFI_SSID),
             .channel = ESP_WIFI_CHANNEL,
-            .password = ESP_WIFI_PASS,
             .max_connection = MAX_STA_CONN,
+            .password = ESP_WIFI_PASS,
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
         },
     };
@@ -224,3 +227,4 @@ void wifiInitSoftap(void)
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
              ESP_WIFI_SSID, ESP_WIFI_PASS, ESP_WIFI_CHANNEL);
 }
+#endif

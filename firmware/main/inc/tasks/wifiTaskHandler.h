@@ -14,5 +14,10 @@
 */
 
 #pragma once
+#ifdef CONFIG_WIFI_DEVICE_MODE_RECEIVER
 void wifiServiceReceiver(void* pvParameters);
+#endif
+
+#ifdef CONFIG_WIFI_DEVICE_MODE_TRANSMITTER
 void wifiServiceTransmitter(void* pvParameters);
+#endif
