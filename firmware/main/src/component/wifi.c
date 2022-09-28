@@ -1,3 +1,5 @@
+#include "wifi.h"
+
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -13,16 +15,22 @@
 
 #define TAG "Wi-Fi"
 
+
 /* The examples use WiFi configuration that you can set via project configuration menu
    If you'd rather not, just change the below entries to strings with
-   the config you want - ie #define EXAMPLE_WIFI_SSID "mywifissid"
+   the config you want - ie #define WIFI_SSID "mywifissid"
 */
-#define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
-#define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
-#define EXAMPLE_ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
+#define ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
+#define ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
 
-#define EXAMPLE_ESP_WIFI_CHANNEL   CONFIG_ESP_WIFI_CHANNEL
-#define EXAMPLE_MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
+#ifdef CONFIG_WIFI_DEVICE_MODE_RECEIVER
+#define ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
+#endif
+
+#ifdef CONFIG_WIFI_DEVICE_MODE_TRANSMITTER
+#define ESP_WIFI_CHANNEL   CONFIG_ESP_WIFI_CHANNEL
+#define MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
+#endif
 
 #if CONFIG_ESP_WIFI_AUTH_OPEN
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_OPEN
@@ -54,7 +62,6 @@ EventGroupHandle_t wifiEventGroup = NULL;
 
 static int s_retry_num = 0;
 
-
 static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
@@ -75,6 +82,7 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                     MAC2STR(ap_stadisconnected_event->mac), ap_stadisconnected_event->aid);
             break;
 
+#ifdef WIFI_DEVICE_MODE_RECEIVER
         case WIFI_EVENT_STA_START:
             if (event_base == WIFI_EVENT) {
                 esp_wifi_connect();
@@ -82,7 +90,7 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             if(event_base == WIFI_EVENT) {
-                if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
+                if (s_retry_num < ESP_MAXIMUM_RETRY) {
                     esp_wifi_connect();
                     s_retry_num++;
                     ESP_LOGI(TAG, "retry to connect to the AP");
@@ -92,6 +100,7 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                 }
             }
             break;
+#endif
         case IP_EVENT_STA_GOT_IP:
             if (event_base == IP_EVENT) {
                 ip_event = (ip_event_got_ip_t*) event_data;
@@ -103,8 +112,18 @@ static void wifiEventHandler(void* arg, esp_event_base_t event_base,
     }
 }
 
+void wifiInitNvs(){
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGE(TAG, "Error initializing nvs. Erasing to try again.");
+        nvs_flash_erase();
+        ret = nvs_flash_init();
+    }
+}
+
 void wifiInitSta(void)
 {
+    wifiInitNvs();
     wifiEventGroup = xEventGroupCreate();
 
     esp_netif_init();
@@ -130,8 +149,8 @@ void wifiInitSta(void)
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
-            .password = EXAMPLE_ESP_WIFI_PASS,
+            .ssid = ESP_WIFI_SSID,
+            .password = ESP_WIFI_PASS,
             /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (pasword len => 8).
              * If you want to connect the device to deprecated WEP/WPA networks, Please set the threshold value
              * to WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK and set the password with length and format matching to
@@ -159,10 +178,10 @@ void wifiInitSta(void)
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
-                 EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+                 ESP_WIFI_SSID, ESP_WIFI_PASS);
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
-                 EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+                 ESP_WIFI_SSID, ESP_WIFI_PASS);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -170,6 +189,7 @@ void wifiInitSta(void)
 
 void wifiInitSoftap(void)
 {
+    wifiInitNvs();
     esp_netif_init();
     esp_event_loop_create_default();
     esp_netif_create_default_wifi_ap();
@@ -185,15 +205,15 @@ void wifiInitSoftap(void)
 
     wifi_config_t wifi_config = {
         .ap = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
-            .ssid_len = strlen(EXAMPLE_ESP_WIFI_SSID),
-            .channel = EXAMPLE_ESP_WIFI_CHANNEL,
-            .password = EXAMPLE_ESP_WIFI_PASS,
-            .max_connection = EXAMPLE_MAX_STA_CONN,
+            .ssid = ESP_WIFI_SSID,
+            .ssid_len = strlen(ESP_WIFI_SSID),
+            .channel = ESP_WIFI_CHANNEL,
+            .password = ESP_WIFI_PASS,
+            .max_connection = MAX_STA_CONN,
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
         },
     };
-    if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
+    if (strlen(ESP_WIFI_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
@@ -202,41 +222,5 @@ void wifiInitSoftap(void)
     esp_wifi_start();
 
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
-             EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS, EXAMPLE_ESP_WIFI_CHANNEL);
-}
-
-void wifiServiceReceiver(void* pvParameters){
-    // I believe that this library is using the nvs partition somewhere (maybe someday I will discover where)
-    // esp_wifi_init brief talks about nvs initialization
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_LOGE(TAG, "Error initializing nvs. Erasing to try again.");
-        nvs_flash_erase();
-        ret = nvs_flash_init();
-    }
-
-	wifiInitSta();
-    for(;;){
-        ESP_LOGD(TAG, "Inside task loop...");
-        vTaskDelay(pdMS_TO_TICKS(3000));
-    }
-}
-
-void wifiServiceTransmitter(void* pvParameters){
-    // I believe that this library is using the nvs partition somewhere (maybe someday I will discover where)
-    // esp_wifi_init brief talks about nvs initialization
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_LOGE(TAG, "Error initializing nvs. Erasing to try again.");
-        nvs_flash_erase();
-        ret = nvs_flash_init();
-    }
-
-	wifiInitSoftap();
-    for(;;){
-        ESP_LOGD(TAG, "Inside task loop...");
-        vTaskDelay(pdMS_TO_TICKS(3000));
-    }
-
+             ESP_WIFI_SSID, ESP_WIFI_PASS, ESP_WIFI_CHANNEL);
 }

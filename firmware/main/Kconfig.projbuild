@@ -1,32 +1,51 @@
-menu "Example Configuration"
+menu "Wi-Fi Configuration"
+
+    choice WIFI_DEVICE_MODE
+        prompt "Wi-Fi Device Mode"
+        default WIFI_DEVICE_MODE_TRANSMITTER
+        help
+            When set to Transmitter mode, an AP will be created using the chosen SSID and PASSWORD (set below, in this menu). After it is in ap mode, the device will be able to open an http server and allow the user to choose a file to send to the connected devices.  
+            When set to Receiver mode, this device will connect to the given SSID (using the given password) when wait to receive one file from that.
+        
+        config WIFI_DEVICE_MODE_TRANSMITTER
+            bool "Transmitter mode (AP)"
+        config WIFI_DEVICE_MODE_RECEIVER
+            bool "Receiver Mode (Station)"
+    endchoice
+
 
     config ESP_WIFI_SSID
         string "WiFi SSID"
         default "myssid"
         help
-            SSID (network name) for the example to connect to.
+            SSID (network name) to connect to.
 
     config ESP_WIFI_PASSWORD
         string "WiFi Password"
         default "mypassword"
         help
-            WiFi password (WPA or WPA2) for the example to use.
+            WiFi password (WPA or WPA2) to be used.
 
     config ESP_MAXIMUM_RETRY
         int "Maximum retry"
         default 5
+            bool "WAPI PSK"
+        depends on WIFI_DEVICE_MODE_RECEIVER
         help
             Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+
     config ESP_WIFI_CHANNEL
         int "WiFi Channel"
         range 1 13
         default 1
+        depends on WIFI_DEVICE_MODE_TRANSMITTER
         help
-            WiFi channel (network channel) for the example to use.
-        
+            WiFi channel (network channel) to be use.
+            
     config ESP_MAX_STA_CONN
         int "Maximal STA connections"
         default 4
+        depends on WIFI_DEVICE_MODE_TRANSMITTER
         help
             Max number of the STA connects to AP.
 
@@ -55,4 +74,5 @@ menu "Example Configuration"
         config ESP_WIFI_AUTH_WAPI_PSK
             bool "WAPI PSK"
     endchoice
+
 endmenu
