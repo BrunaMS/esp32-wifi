@@ -14,34 +14,45 @@
 #include "esp_spiffs.h"
 #include "filesystem.h"
 
+#define TAG "filesystem"
+#define SPIFFS_PATH "/storage"
+#define MAX_FILE_NAME 64
 
-#define TAG = "filesystem";
-#define SPIFFS_PATH "/spiffs/"
-
-int readFile(char* filename, char* content){
-    ESP_LOGI(TAG, "Opening file");
-    FILE* f = fopen(SPIFFS_PATH "hello.txt", "w");
+int writeFile(char* filename, char* content){
+    char path[MAX_FILE_NAME] = "";
+    FILE* f = NULL;
+    
+    snprintf(path, MAX_FILE_NAME, "%s/%s", SPIFFS_PATH, filename);
+    f = fopen(path, "w");
+    
+    ESP_LOGI(TAG, "Writing on file");
     if (f == NULL) {
         ESP_LOGE(TAG, "Failed to open file for writing");
-        return;
+        return -1;
     }
-    fprintf(f, "Hello World!\n");
+    fprintf(f, content);
     fclose(f);
+    return 0; 
 }
 
-int writeFile(char* filename, char* buffer, int bufferSize){
+int readFile(char* filename, char* buffer, int bufferSize){
+    char path[MAX_FILE_NAME] = "";
+    FILE* f = NULL;
+    
+    snprintf(path, MAX_FILE_NAME, "%s/%s", SPIFFS_PATH, filename);
+    f = fopen(path, "r");
+    
     ESP_LOGI(TAG, "Reading file");
-    f = fopen(SPIFFS_PATH filename, "r");
     if (f == NULL) {
         ESP_LOGE(TAG, "Failed to open file for reading");
-        return;
+        return -1;
     }
 
     char c = 'a';
     int size = 0;
     while(!feof(f) && (size < bufferSize)){
         c = fgetc(f);
-        if!feof(f){
+        if(!feof(f)){
             buffer[size] = c;
             size++;
         }
@@ -53,6 +64,7 @@ int writeFile(char* filename, char* buffer, int bufferSize){
     //     *pos = '\0';
     // }
     ESP_LOGI(TAG, "Read from file: '%s'", buffer);
+    return size;
 }
 
 void initFilesystem(void)
@@ -60,7 +72,7 @@ void initFilesystem(void)
     ESP_LOGI(TAG, "Initializing SPIFFS");
 
     esp_vfs_spiffs_conf_t conf = {
-      .base_path = "/spiffs",
+      .base_path = SPIFFS_PATH,
       .partition_label = NULL,
       .max_files = 5,
       .format_if_mount_failed = true

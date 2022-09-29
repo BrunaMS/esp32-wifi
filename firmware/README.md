@@ -40,6 +40,7 @@ The general rules for the routing process were:
 |Firmware|Feature|Develop some type of interface to be used when it is in receiver mode
 |Firmware|Fix| Convert components into real components (submodules in git), making possible the use in other projects
 |Firmware|Fix| Organize the different "layers" of the project (e.g. components, common, task, main), creating uncoupled classes/libraries/functions
+|Firmware|Docs| Explain function in header (.h file) of each component(brief, params, return) using Doxygen 
 |Hardware|Test|Check if with built-in antenna can reach 100m of distance between devices or if its necessary to use another one |
 
 
