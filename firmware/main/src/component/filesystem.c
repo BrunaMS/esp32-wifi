@@ -58,11 +58,7 @@ int readFile(char* filename, char* buffer, int bufferSize){
         }
     }
     fclose(f);
-    // // strip newline
-    // char* pos = strchr(line, '\n');
-    // if (pos) {
-    //     *pos = '\0';
-    // }
+
     ESP_LOGI(TAG, "Read from file: '%s'", buffer);
     return size;
 }

@@ -17,7 +17,7 @@
  * 
  * @note It is necessary to call that only if start_webserver was called before 
  */
-void stop_webserver(httpd_handle_t server);
+void stopWebserver(httpd_handle_t server);
 
 
-httpd_handle_t start_webserver(void);
+void startWebserver(char* toSendBuffer, size_t sizeBuffer);

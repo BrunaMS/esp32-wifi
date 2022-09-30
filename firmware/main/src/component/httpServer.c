@@ -10,47 +10,42 @@
 #define TAG "Web Server"
 #define PACKAGE_SIZE 512
 
-char resp[TEST_MAX_FILE_LENGTH] = "";
+size_t size = 0;
+char *pContentBuffer = NULL;
 
 /* Our URI handler function to be called during GET /uri request */
-esp_err_t get_handler(httpd_req_t *req)
+esp_err_t getHandler(httpd_req_t *req)
 {
     /* Send a simple response */
-
-    int size = readFile(TEST_FILE_NAME, resp, TEST_MAX_FILE_LENGTH);
-    
-    httpd_resp_set_type(req, "text/plain");
-    // char temp[1000] = "";
-    char *pResp = resp;
-    while(size > PACKAGE_SIZE){
-        httpd_resp_send_chunk(req, pResp, PACKAGE_SIZE);
-        pResp = pResp+PACKAGE_SIZE;
-        size -=PACKAGE_SIZE;
+    if(pContentBuffer){
+        char *pTmpBuffer = pContentBuffer;
+        httpd_resp_set_type(req, "text/plain");
+        while(size > PACKAGE_SIZE){
+            httpd_resp_send_chunk(req, pTmpBuffer, PACKAGE_SIZE);
+            pTmpBuffer = pTmpBuffer+PACKAGE_SIZE;
+            size -=PACKAGE_SIZE;
+        }
+        httpd_resp_send_chunk(req, pTmpBuffer, size);
+        return ESP_OK;
     }
-    httpd_resp_send_chunk(req, pResp, size);
-    return ESP_OK;
+    ESP_LOGE(TAG, "Error getting content pointer");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
 }
 
 /* URI handler structure for GET /uri */
-httpd_uri_t uri_get = {
-    .uri      = "/file_content",
+httpd_uri_t uriGet = {
+    .uri      = "/getFileContent",
     .method   = HTTP_GET,
-    .handler  = get_handler,
+    .handler  = getHandler,
     .user_ctx = NULL
 };
 
-// /* URI handler structure for POST /uri */
-// httpd_uri_t uri_post = {
-//     .uri      = "/file_content",
-//     .method   = HTTP_POST,
-//     .handler  = post_handler,
-//     .user_ctx = NULL
-// };
-
 /* Function for starting the webserver */
-httpd_handle_t start_webserver(void)
+httpd_handle_t startWebserver(char* toSendBuffer, size_t sizeBuffer)
 {
-
+    pContentBuffer = toSendBuffer;
+    size = sizeBuffer;
     /* Generate default configuration */
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
@@ -59,16 +54,14 @@ httpd_handle_t start_webserver(void)
 
     /* Start the httpd server */
     if (httpd_start(&server, &config) == ESP_OK) {
-        /* Register URI handlers */
-        httpd_register_uri_handler(server, &uri_get);
-        // httpd_register_uri_handler(server, &uri_post);
+        httpd_register_uri_handler(server, &uriGet);
     }
     /* If server failed to start, handle will be NULL */
     return server;
 }
 
 /* Function for stopping the webserver */
-void stop_webserver(httpd_handle_t server)
+void stopWebserver(httpd_handle_t server)
 {
     if (server) {
         /* Stop the httpd server */
