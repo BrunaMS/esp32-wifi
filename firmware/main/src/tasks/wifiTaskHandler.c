@@ -1,3 +1,4 @@
+#include "cJSON.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 
@@ -12,19 +13,18 @@
 #include "freertos/event_groups.h"
 
 #define TAG "WiFi Task"
+/* FreeRTOS event group to signal when we are connected*/
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
+
+#define SERVER_BUFFER_SIZE 10000
 
 int s_retry_num = 0;
-/* FreeRTOS event group to signal when we are connected*/
-EventGroupHandle_t wifiEventGroup = NULL;
 
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
  * - we failed to connect after the maximum amount of retries */
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
-
-// char fileBuffer[] = "TESTANDOooooo 1, 2, 3";
-char fileBuffer[TEST_MAX_FILE_LENGTH] = "";
+EventGroupHandle_t wifiEventGroup = NULL;
 
 static void wifiEventHandler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -95,7 +95,7 @@ void wifiServiceReceiver(void* pvParameters){
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s\n Requesting file to server",
                  ESP_WIFI_SSID, ESP_WIFI_PASS);
-        httpRequestFile(fileBuffer, TEST_MAX_FILE_LENGTH);
+        httpRequestFile(FILE_NAME);
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
                  ESP_WIFI_SSID, ESP_WIFI_PASS);
@@ -113,13 +113,7 @@ void wifiServiceTransmitter(void* pvParameters){
     wifiEventGroup = xEventGroupCreate();
 	wifiInitSoftap(wifiEventHandler);
 
-    int fileSize = readFile(TEST_FILE_NAME, fileBuffer, TEST_MAX_FILE_LENGTH);
-    if(fileSize > 0){
-        startWebserver(fileBuffer, strlen(fileBuffer));
-    }else{
-        startWebserver("ERROR GETTING FILE CONTENT", sizeof("ERROR GETTING FILE CONTENT"));
-        ESP_LOGE(TAG, "Error getting file content to send");
-    }
+    startWebserver();
     for(;;){
         ESP_LOGD(TAG, "Inside task loop (transmitter)...");
         vTaskDelay(pdMS_TO_TICKS(3000));

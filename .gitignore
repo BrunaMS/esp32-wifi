@@ -1,4 +1,6 @@
 .vscode/
 build/
 *.old
+*.txt
 firmware/sdkconfig
+firmware/tests/venv

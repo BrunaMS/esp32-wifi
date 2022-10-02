@@ -11,104 +11,109 @@
 #include "esp_tls.h"
 #include "esp_event.h"
 #include "esp_system.h"
-
 #include "esp_http_client.h"
+
 #include "freertos/event_groups.h"
 
 #include "string.h"
 #include "httpClient.h"
+#include "filesystem.h"
 
 #define TAG "Http Client"
-#define MAX_HTTP_RECV_BUFFER 2048
-#define MAX_HTTP_OUTPUT_BUFFER 2048
-
+#define CLIENT_RX_BUFFER_SIZE 2048
 #define HTTPS_RECEIVED_DATA_BIT BIT0
 
-EventGroupHandle_t httpEventGroup = NULL;
-uint32_t bufferSize = 0;
-uint32_t bufferAvailable = 0;
+char filename[MAX_FILE_NAME] = "";
+EventGroupHandle_t clientEventGroup = NULL;
+// uint32_t bufferSize = 0;
+// uint32_t bufferAvailable = 0;
 
 esp_err_t httpEventHandler(esp_http_client_event_t *evt)
 {
-    switch(evt->event_id) {
-        case HTTP_EVENT_ERROR:
-            ESP_LOGE(TAG, "HTTP_EVENT_ERROR");
-            break;
-        case HTTP_EVENT_ON_CONNECTED:
-            ESP_LOGW(TAG, "HTTP_EVENT_ON_CONNECTED");
-            break;
-        case HTTP_EVENT_HEADER_SENT:
-            ESP_LOGI(TAG, "HTTP_EVENT_HEADER_SENT");
-            break;
-        case HTTP_EVENT_ON_HEADER:
-            ESP_LOGI(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
-            break;
-        case HTTP_EVENT_ON_DATA:
-            ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-            printf("\n\nevt->user_data\n%s\n\n",(char *)evt->data);
-            if (evt->user_data) {
-                strncpy(evt->user_data + bufferSize, evt->data, bufferAvailable);
-            }
-            bufferSize += evt->data_len;
-            bufferAvailable -= evt->data_len;
+    int messageSize = 0;
+    static uint64_t totalSize = 0;
+    char responseBuffer[CLIENT_RX_BUFFER_SIZE] = "";
 
+
+    switch(evt->event_id) {
+        case HTTP_EVENT_ON_DATA:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA. event data len: %d", evt->data_len);
+            messageSize = evt->data_len;
+            strncpy(responseBuffer, (char *)evt->data, messageSize);
+            if(messageSize > 0){
+                totalSize += messageSize;
+                ESP_LOGW(TAG, "Total of %llu: bytes read[%d].", totalSize, messageSize);
+                writeFile(filename, responseBuffer, true);
+            }
             break;
         case HTTP_EVENT_ON_FINISH:
             ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
-            bufferSize = 0;
-            xEventGroupSetBits(httpEventGroup, HTTPS_RECEIVED_DATA_BIT);
+            totalSize = 0;
+            xEventGroupSetBits(clientEventGroup, HTTPS_RECEIVED_DATA_BIT);
+            break;
+        case HTTP_EVENT_ERROR:
+            ESP_LOGD(TAG, "HTTP_EVENT_ERROR");
+            break;
+        case HTTP_EVENT_ON_CONNECTED:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_CONNECTED");
+            break;
+        case HTTP_EVENT_HEADER_SENT:
+            ESP_LOGD(TAG, "HTTP_EVENT_HEADER_SENT");
+            break;
+        case HTTP_EVENT_ON_HEADER:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
             break;
         case HTTP_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
+            totalSize = 0;
             int mbedtls_err = 0;
             esp_err_t err = esp_tls_get_and_clear_last_error((esp_tls_error_handle_t)evt->data, &mbedtls_err, NULL);
             if (err != 0) {
                 ESP_LOGI(TAG, "Last esp error code: 0x%x", err);
                 ESP_LOGI(TAG, "Last mbedtls failure: 0x%x", mbedtls_err);
             }
-            bufferSize = 0;
             break;
     }
     return ESP_OK;
 }
  
-void httpGet(char* url, char *responseBuffer, size_t bufferSize)
-{
+void httpGetFile(char* serverUrl, char* path, char *filename){
+    esp_err_t err = ESP_OK;
+    esp_http_client_handle_t client = NULL;
+
     esp_http_client_config_t config = {
-        .url = url,
+        .url = serverUrl,
         // .host = serverUrl,
-        // .path = path,
+        .path = path,
         // .user_data = responseBuffer,
         .event_handler = httpEventHandler,
+        .buffer_size = CLIENT_RX_BUFFER_SIZE-5,
     };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    esp_err_t err = esp_http_client_perform(client);
 
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "HTTP chunk encoding Status = %d, content_length = %d",
-                esp_http_client_get_status_code(client),
-                esp_http_client_get_content_length(client));
-                int sizeRead = esp_http_client_read_response(client, responseBuffer, bufferSize);
-                printf("##### RESPONSE[%d]: \n%s\n\n", sizeRead, responseBuffer);
-    } else {
-        ESP_LOGE(TAG, "Error perform http request %s", esp_err_to_name(err));
-    }
+    client = esp_http_client_init(&config);
+    esp_http_client_set_header(client, "filename", filename);
+    err = esp_http_client_perform(client);
+
     esp_http_client_cleanup(client);
 }
 
-void httpRequestFile(char* fileBuffer, size_t bufferSize)
-{   
+void httpRequestFile(char *file){   
     int responseReceived = 0;
-    httpEventGroup = xEventGroupCreate();
-    
+    strncpy(filename, file, MAX_FILE_NAME);
+    clientEventGroup = xEventGroupCreate();
+
+    if(exists(filename)){
+        ESP_LOGW(TAG, "File '%s' already exists. Deleting to create a new one", filename);
+        deleteFile(filename);
+    }
+
     do{
-        bufferAvailable = bufferSize;
         ESP_LOGW(TAG, "Sending request to server... ");
-        // http_get("http://192.168.4.1/getFileContent");
-        httpGet("http://httpbin.org/robots.txt", "", fileBuffer, bufferSize);
-        responseReceived = xEventGroupWaitBits(httpEventGroup, HTTPS_RECEIVED_DATA_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(10000)) & HTTPS_RECEIVED_DATA_BIT;
+        httpGetFile("http://192.168.15.6:8080/", "", filename);
+        responseReceived = xEventGroupWaitBits(clientEventGroup, HTTPS_RECEIVED_DATA_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(120000)) & HTTPS_RECEIVED_DATA_BIT;
     }while(responseReceived == 0);
 
-    xEventGroupClearBits(httpEventGroup, HTTPS_RECEIVED_DATA_BIT);
+    ESP_LOGI(TAG, "EventGroup message received.");
+    xEventGroupClearBits(clientEventGroup, HTTPS_RECEIVED_DATA_BIT);
     return;
 }

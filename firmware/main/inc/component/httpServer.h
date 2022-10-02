@@ -20,4 +20,4 @@
 void stopWebserver(httpd_handle_t server);
 
 
-void startWebserver(char* toSendBuffer, size_t sizeBuffer);
+void startWebserver();

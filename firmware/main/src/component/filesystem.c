@@ -18,12 +18,26 @@
 #define SPIFFS_PATH "/storage"
 #define MAX_FILE_NAME 64
 
-int writeFile(char* filename, char* content){
+bool deleteFile(char *filename){
+    char path[MAX_FILE_NAME] = "";
+    snprintf(path,  MAX_FILE_NAME, "%s/%s", SPIFFS_PATH, filename);
+    return (remove(path) == 0);
+}
+
+bool exists(char *filename){
+    struct stat buffer;   
+    char path[MAX_FILE_NAME] = "";
+    
+    snprintf(path,  MAX_FILE_NAME, "%s/%s", SPIFFS_PATH, filename);
+    return (stat(path, &buffer) == 0);
+}
+
+int writeFile(char* filename, char* content, bool append){
     char path[MAX_FILE_NAME] = "";
     FILE* f = NULL;
     
     snprintf(path, MAX_FILE_NAME, "%s/%s", SPIFFS_PATH, filename);
-    f = fopen(path, "w");
+    f = fopen(path, append?"a":"w");
     
     ESP_LOGI(TAG, "Writing on file");
     if (f == NULL) {
@@ -33,6 +47,37 @@ int writeFile(char* filename, char* content){
     fprintf(f, content);
     fclose(f);
     return 0; 
+}
+
+
+bool getNextFilePart(char* filename, char* buffer, int bufferSize, int* len){
+    bool eof = false;
+    static FILE *f = NULL;
+    char path[MAX_FILE_NAME] = "";
+    
+    if(f == NULL){
+        ESP_LOGW(TAG, "File '%s' is not open yet. Doing that now.", filename);
+        snprintf(path, MAX_FILE_NAME, "%s/%s", SPIFFS_PATH, filename);
+        f = fopen(path, "r");
+    }
+    char c = '\0';
+    int size = 0;
+    while(!eof && (size < bufferSize)){
+        c = fgetc(f);
+        eof = feof(f);
+        if(!eof){
+            buffer[size] = c;
+            size++;
+        }
+    }
+    *len = size;
+    if(eof){
+        fclose(f);
+        f = NULL;
+        return false;
+    }
+    buffer[size] = '\0';
+    return true;
 }
 
 int readFile(char* filename, char* buffer, int bufferSize){
@@ -57,8 +102,11 @@ int readFile(char* filename, char* buffer, int bufferSize){
             size++;
         }
     }
-    fclose(f);
+    if(!feof(f)){
+        ESP_LOGW(TAG, "Reached buffer size before eof");
+    }
 
+    fclose(f);
     ESP_LOGI(TAG, "Read from file: '%s'", buffer);
     return size;
 }
@@ -124,8 +172,4 @@ void initFilesystem(void)
             ESP_LOGI(TAG, "SPIFFS_check() successful");
         }
     }
-
-    // // All done, unmount partition and disable SPIFFS
-    // esp_vfs_spiffs_unregister(conf.partition_label);
-    // ESP_LOGI(TAG, "SPIFFS unmounted");
 }
