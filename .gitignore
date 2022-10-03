@@ -4,3 +4,8 @@ build/
 *.txt
 firmware/sdkconfig
 firmware/tests/venv
+
+
+#auto_saved_files#
+fp-info-cache
+wireless-backups/
