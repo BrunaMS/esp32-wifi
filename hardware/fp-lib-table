@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name "digikey-footprints")(type "KiCad")(uri "D:/Documents/Projects/digikey-kicad-library/digikey-footprints.pretty")(options "")(descr ""))
+  (lib (name "SOT-26-6")(type "KiCad")(uri "${KIPRJMOD}/libraries/TSM3443CX6_RFG")(options "")(descr ""))
+)
